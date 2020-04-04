@@ -1,0 +1,64 @@
+version: "3"
+
+services:
+  postgres:
+    image: postgres
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=chat_bot
+      - POSTGRES_PASSWORD=bot_chat
+      - POSTGRES_DB=chat_bot
+    ports:
+      - "14320:5432"
+    volumes:
+      - "./tmp/postgres:/var/lib/postgresql/data"
+
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - "16379:6379"
+
+  frontend:
+    image: pgillich/chat-bot
+    container_name: frontend
+    entrypoint: ["/chat-bot", "frontend"]
+    environment:
+      - REDIS_HOST=redis:6379
+      - LOG_LEVEL=INFO
+    ports:
+      - "8088:8088"
+    depends_on:
+      - postgres
+      - redis
+
+  engine:
+    image: pgillich/chat-bot
+    container_name: engine
+    entrypoint: ["/chat-bot", "engine"]
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis:6379
+      - CLIENT_ENDPOINT=http://tester:8089/
+      - LOG_LEVEL=INFO
+    ports:
+      - "8087:8087"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./rsa:/rsa
+    depends_on:
+      - frontend
+
+  tester:
+    image: registry.gitlab.com/hellowearemito/go-tester
+    container_name: tester
+    restart: always
+    entrypoint: ["/app/tester", "-endpoint", "http://frontend:8088/chat"]
+    ports:
+      - "8089:8089"
+    volumes:
+      - "./rsa/chat_rsa.pub:/app/chat_rsa.pub"
+    depends_on:
+      - engine
